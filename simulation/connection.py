@@ -15,6 +15,8 @@ except IndexError:
 import carla
 from simulation.settings import PORT, TIMEOUT, HOST
 
+from srunner.tools.scenario_parser import ScenarioConfigurationParser
+
 class ClientConnection:
     def __init__(self, town):
         self.client = None
