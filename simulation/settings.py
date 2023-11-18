@@ -8,7 +8,7 @@ Names of the parameters are self-explanatory therefore elimating the use of furt
 '''
 
 
-HOST = "localhost"
+HOST = "127.0.0.1"
 PORT = 2000
 TIMEOUT = 20.0
 
@@ -17,7 +17,7 @@ EPISODE_LENGTH = 120
 NUMBER_OF_VEHICLES = 30
 NUMBER_OF_PEDESTRIAN = 10
 CONTINUOUS_ACTION = True
-VISUAL_DISPLAY = True
+VISUAL_DISPLAY = False
 
 
 RGB_CAMERA = 'sensor.camera.rgb'
