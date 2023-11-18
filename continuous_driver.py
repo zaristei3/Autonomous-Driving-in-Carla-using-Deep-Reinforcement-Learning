@@ -131,22 +131,40 @@ def runner():
                 timestep = data['timestep']
                 cumulative_score = data['cumulative_score']
                 action_std_init = data['action_std_init']
-            agent = PPOAgent(town, action_std_init)
-            agent.load()
+            good_agent = PPOAgent(town, action_std_init)
+            bad_agent = PPOAgent(town, action_std_init, good=False)
+            good_agent.load()
+            try:
+                bad_agent.load()
+            except Exception as e:
+                bad_agent.good = True
+                bad_agent.load()
+                bad_agent.good = False
         else:
             if train == False:
-                agent = PPOAgent(town, action_std_init)
-                agent.load()
-                for params in agent.old_policy.actor.parameters():
+                good_agent = PPOAgent(town, action_std_init)
+                bad_agent = PPOAgent(town, action_std_init, good=False)
+                good_agent.load()
+                try:
+                    bad_agent.load()
+                except Exception as e:
+                    bad_agent.good = True
+                    bad_agent.load()
+                    bad_agent.good = False
+
+                for params in good_agent.old_policy.actor.parameters():
+                    params.requires_grad = False
+                for params in bad_agent.old_policy.actor.parameters():
                     params.requires_grad = False
             else:
-                agent = PPOAgent(town, action_std_init)
+                good_agent = PPOAgent(town, action_std_init)
+                bad_agent = PPOAgent(town, action_std_init, good=False)
         if train:
             #Training
             while timestep < total_timesteps:
             
-                observation = env.reset()
-                observation = encode.process(observation)
+                good_observation, bad_observation = env.reset()
+                good_observation, bad_observation= encode.process(good_observation), encode.process(bad_observation)
 
                 current_ep_reward = 0
                 t1 = datetime.now()
@@ -154,24 +172,28 @@ def runner():
                 for t in range(args.episode_length):
                 
                     # select action with policy
-                    action = agent.get_action(observation, train=True)
+                    good_action = good_agent.get_action(good_observation, train=True)
+                    bad_action = bad_agent.get_action(bad_observation, train=True)
 
-                    observation, reward, done, info = env.step(action)
-                    if observation is None:
+                    good_observation, bad_observation, reward, done, info = env.step((good_action, bad_action))
+                    if good_observation is None or bad_observation is None:
                         break
-                    observation = encode.process(observation)
+                    good_observation, bad_observation= encode.process(good_observation), encode.process(bad_observation)
                     
-                    agent.memory.rewards.append(reward)
-                    agent.memory.dones.append(done)
+                    good_agent.memory.rewards.append(reward)
+                    good_agent.memory.dones.append(done)
+                    bad_agent.memory.rewards.append(-1*reward)
+                    bad_agent.memory.dones.append(done)
                     
                     timestep +=1
                     current_ep_reward += reward
                     
                     if timestep % action_std_decay_freq == 0:
-                        action_std_init =  agent.decay_action_std(action_std_decay_rate, min_action_std)
+                        action_std_init =  good_agent.decay_action_std(action_std_decay_rate, min_action_std)
 
                     if timestep == total_timesteps -1:
-                        agent.chkpt_save()
+                        good_agent.chkpt_save()
+                        bad_agent.chkpt_save()
 
                     # break; if the episode is over
                     if done:
@@ -196,8 +218,10 @@ def runner():
 
                 print('Episode: {}'.format(episode),', Timestep: {}'.format(timestep),', Reward:  {:.2f}'.format(current_ep_reward),', Average Reward:  {:.2f}'.format(cumulative_score))
                 if episode % 10 == 0:
-                    agent.learn()
-                    agent.chkpt_save()
+                    good_agent.learn()
+                    bad_agent.learn()
+                    good_agent.chkpt_save()
+                    bad_agent.chkpt_save()
                     chkt_file_nums = len(next(os.walk(f'checkpoints/PPO/{town}'))[2])
                     if chkt_file_nums != 0:
                         chkt_file_nums -=1
@@ -227,7 +251,8 @@ def runner():
 
                 if episode % 100 == 0:
                     
-                    agent.save()
+                    good_agent.save()
+                    bad_agent.save()
                     chkt_file_nums = len(next(os.walk(f'checkpoints/PPO/{town}'))[2])
                     chkpt_file = f'checkpoints/PPO/{town}/checkpoint_ppo_'+str(chkt_file_nums)+'.pickle'
                     data_obj = {'cumulative_score': cumulative_score, 'episode': episode, 'timestep': timestep, 'action_std_init': action_std_init}
@@ -239,18 +264,19 @@ def runner():
         else:
             #Testing
             while timestep < args.test_timesteps:
-                observation = env.reset()
-                observation = encode.process(observation)
+                good_observation, bad_observation = env.reset()
+                good_observation, bad_observation = encode.process(good_observation), encode.process(bad_observation)
 
                 current_ep_reward = 0
                 t1 = datetime.now()
                 for t in range(args.episode_length):
                     # select action with policy
-                    action = agent.get_action(observation, train=False)
-                    observation, reward, done, info = env.step(action)
-                    if observation is None:
+                    good_action = good_agent.get_action(good_observation, train=False)
+                    bad_action = bad_agent.get_action(bad_observation, train=False)
+                    good_observation, bad_observation, reward, done, info = env.step([good_action, bad_action])
+                    if good_observation is None or bad_observation is None:
                         break
-                    observation = encode.process(observation)
+                    good_observation, bad_observation = encode.process(good_observation), encode.process(bad_observation)
                     
                     timestep +=1
                     current_ep_reward += reward

@@ -19,7 +19,8 @@ class CarlaEnvironment():
         self.action_space = self.get_discrete_action_space()
         self.continous_action_space = continuous_action
         self.display_on = VISUAL_DISPLAY
-        self.vehicle = None
+        self.good_vehicle = None
+        self.bad_vehicle = None
         self.settings = None
         self.current_waypoint_index = 0
         self.checkpoint_waypoint_index = 0
@@ -29,7 +30,8 @@ class CarlaEnvironment():
         self.town = town
         
         # Objects to be kept alive
-        self.camera_obj = None
+        self.good_camera_obj = None
+        self.bad_camera_obj = None
         self.env_camera_obj = None
         self.collision_obj = None
         self.lane_invasion_obj = None
@@ -56,57 +58,65 @@ class CarlaEnvironment():
 
 
             # Blueprint of our main vehicle
-            vehicle_bp = self.get_vehicle(CAR_NAME)
+            good_vehicle_bp = self.get_vehicle(CAR_NAME)
+            bad_vehicle_bp = self.get_vehicle(CAR_NAME)
 
-            if self.town == "Town07":
-                transform = self.map.get_spawn_points()[38] #Town7  is 38 
-                self.total_distance = 750
-            elif self.town == "Town02":
+            if self.town == "Town02":
                 choices = [self.map.get_spawn_points()[6], self.map.get_spawn_points()[11]]
-                transform = random.choice(choices)
+                good_transform, bad_transform = choices[0], choices[1]
                 #Town2 is 11 or 6
                 self.total_distance = 780
             else:
-                transform = random.choice(self.map.get_spawn_points())
-                self.total_distance = 250
+                raise Exception("Town not supported")
 
-            self.vehicle = self.world.try_spawn_actor(vehicle_bp, transform)
-            self.actor_list.append(self.vehicle)
+            self.good_vehicle = self.world.try_spawn_actor(good_vehicle_bp, good_transform)
+            self.bad_vehicle = self.world.try_spawn_actor(bad_vehicle_bp, bad_transform)
+            self.actor_list.append(self.good_vehicle)
+            self.actor_list.append(self.bad_vehicle)
 
 
             # Camera Sensor
-            self.camera_obj = CameraSensor(self.vehicle)
-            while(len(self.camera_obj.front_camera) == 0):
+            self.good_camera_obj = CameraSensor(self.good_vehicle)
+            self.bad_camera_obj = CameraSensor(self.bad_vehicle)
+            while(len(self.good_camera_obj.front_camera) == 0 or len(self.bad_camera_obj.front_camera) == 0):
                 time.sleep(0.0001)
-            self.image_obs = self.camera_obj.front_camera.pop(-1)
-            self.sensor_list.append(self.camera_obj.sensor)
+            self.good_image_obs = self.good_camera_obj.front_camera.pop(-1)
+            self.sensor_list.append(self.good_camera_obj.sensor)
+
+            self.bad_image_obs = self.bad_camera_obj.front_camera.pop(-1)
+            self.sensor_list.append(self.bad_camera_obj.sensor)
 
             # Third person view of our vehicle in the Simulated env
             if self.display_on:
-                self.env_camera_obj = CameraSensorEnv(self.vehicle)
+                self.env_camera_obj = CameraSensorEnv(self.good_vehicle)
                 self.sensor_list.append(self.env_camera_obj.sensor)
 
             # Collision sensor
-            self.collision_obj = CollisionSensor(self.vehicle)
+            self.collision_obj = CollisionSensor(self.good_vehicle)
             self.collision_history = self.collision_obj.collision_data
             self.sensor_list.append(self.collision_obj.sensor)
 
             
             self.timesteps = 0
-            self.rotation = self.vehicle.get_transform().rotation.yaw
-            self.previous_location = self.vehicle.get_location()
-            self.distance_traveled = 0.0
+            self.good_rotation = self.good_vehicle.get_transform().rotation.yaw
+            self.bad_rotation = self.bad_vehicle.get_transform().rotation.yaw
+            self.good_previous_location = self.good_vehicle.get_location()
+            self.bad_previous_location = self.bad_vehicle.get_location()
             self.center_lane_deviation = 0.0
             self.target_speed = 22 #km/h
             self.max_speed = 25.0
             self.min_speed = 15.0
             self.max_distance_from_center = 3
-            self.throttle = float(0.0)
-            self.previous_steer = float(0.0)
-            self.velocity = float(0.0)
-            self.distance_from_center = float(0.0)
-            self.angle = float(0.0)
-            self.center_lane_deviation = 0.0
+            self.good_throttle = float(0.0)
+            self.bad_throttle = float(0.0)
+            self.good_previous_steer = float(0.0)
+            self.bad_previous_steer = float(0.0)
+            self.good_velocity = float(0.0)
+            self.bad_velocity = float(0.0)
+            self.good_distance_from_center = float(0.0)
+            self.bad_distance_from_center = float(0.0)
+            self.good_angle = float(0.0)
+            self.bad_angle = float(0.0)
             self.distance_covered = 0.0
 
 
@@ -114,39 +124,35 @@ class CarlaEnvironment():
                 self.current_waypoint_index = 0
                 # Waypoint nearby angle and distance from it
                 self.route_waypoints = list()
-                self.waypoint = self.map.get_waypoint(self.vehicle.get_location(), project_to_road=True, lane_type=(carla.LaneType.Driving))
+                self.waypoint = self.map.get_waypoint(self.good_vehicle.get_location(), project_to_road=True, lane_type=(carla.LaneType.Driving))
                 current_waypoint = self.waypoint
                 self.route_waypoints.append(current_waypoint)
                 for x in range(self.total_distance):
-                    if self.town == "Town07":
-                        if x < 650:
-                            next_waypoint = current_waypoint.next(1.0)[0]
-                        else:
-                            next_waypoint = current_waypoint.next(1.0)[-1]
-                    elif self.town == "Town02":
+                    if self.town == "Town02":
                         if x < 650:
                             next_waypoint = current_waypoint.next(1.0)[-1]
                         else:
                             next_waypoint = current_waypoint.next(1.0)[0]
                     else:
-                        next_waypoint = current_waypoint.next(1.0)[0]
+                        raise Exception("Town not supported")
                     self.route_waypoints.append(next_waypoint)
                     current_waypoint = next_waypoint
             else:
                 # Teleport vehicle to last checkpoint
                 waypoint = self.route_waypoints[self.checkpoint_waypoint_index % len(self.route_waypoints)]
                 transform = waypoint.transform
-                self.vehicle.set_transform(transform)
+                self.good_vehicle.set_transform(transform)
                 self.current_waypoint_index = self.checkpoint_waypoint_index
 
-            self.navigation_obs = np.array([self.throttle, self.velocity, self.previous_steer, self.distance_from_center, self.angle])
+            self.good_navigation_obs = np.array([self.good_throttle, self.good_velocity, self.good_previous_steer, self.good_distance_from_center, self.good_angle])
+            self.bad_navigation_obs = np.array([self.bad_throttle, self.bad_velocity, self.bad_previous_steer, self.bad_distance_from_center, self.bad_angle])
 
                         
             time.sleep(0.5)
             self.collision_history.clear()
 
             self.episode_start_time = time.time()
-            return [self.image_obs, self.navigation_obs]
+            return [self.good_image_obs, self.good_navigation_obs], [self.bad_image_obs, self.bad_navigation_obs]
 
         except:
             self.client.apply_batch([carla.command.DestroyActor(x) for x in self.sensor_list])
@@ -171,40 +177,65 @@ class CarlaEnvironment():
             self.fresh_start = False
 
             # Velocity of the vehicle
-            velocity = self.vehicle.get_velocity()
-            self.velocity = np.sqrt(velocity.x**2 + velocity.y**2 + velocity.z**2) * 3.6
+            good_velocity = self.good_vehicle.get_velocity()
+            self.good_velocity = np.sqrt(good_velocity.x**2 + good_velocity.y**2 + good_velocity.z**2) * 3.6
+
+            bad_velocity = self.bad_vehicle.get_velocity()
+            self.bad_velocity = np.sqrt(bad_velocity.x**2 + bad_velocity.y**2 + bad_velocity.z**2) * 3.6
+            
+            good_action_idx, bad_action_idx = action_idx[0], action_idx[1]
             
             # Action fron action space for contolling the vehicle with a discrete action
             if self.continous_action_space:
-                steer = float(action_idx[0])
-                steer = max(min(steer, 1.0), -1.0)
-                throttle = float((action_idx[1] + 1.0)/2)
-                throttle = max(min(throttle, 1.0), 0.0)
-                self.vehicle.apply_control(carla.VehicleControl(steer=self.previous_steer*0.9 + steer*0.1, throttle=self.throttle*0.9 + throttle*0.1))
-                self.previous_steer = steer
-                self.throttle = throttle
+                good_steer = float(good_action_idx[0])
+                good_steer = max(min(good_steer, 1.0), -1.0)
+                bad_steer = float(bad_action_idx[0])
+                bad_steer = max(min(bad_steer, 1.0), -1.0)
+                
+                good_throttle = float((good_action_idx[1] + 1.0)/2)
+                good_throttle = max(min(good_throttle, 1.0), 0.0)
+                bad_throttle = float((bad_action_idx[1] + 1.0)/2)
+                bad_throttle = max(min(bad_throttle, 1.0), 0.0)
+
+                self.good_vehicle.apply_control(carla.VehicleControl(steer=self.good_previous_steer*0.9 + good_steer*0.1, throttle=self.good_throttle*0.9 + good_throttle*0.1))
+                self.bad_vehicle.apply_control(carla.VehicleControl(steer=self.bad_previous_steer*0.9 + bad_steer*0.1, throttle=self.bad_throttle*0.9 + bad_throttle*0.1))
+                self.good_previous_steer = good_steer
+                self.bad_previous_steer = bad_steer
+                self.good_throttle = good_throttle
+                self.bad_throttle = bad_throttle
             else:
-                steer = self.action_space[action_idx]
-                if self.velocity < 20.0:
-                    self.vehicle.apply_control(carla.VehicleControl(steer=self.previous_steer*0.9 + steer*0.1, throttle=1.0))
+                good_steer = self.good_action_space[good_action_idx]
+                bad_steer = self.bad_action_space[bad_action_idx]
+                if self.good_velocity < 20.0:
+                    self.good_vehicle.apply_control(carla.VehicleControl(steer=self.good_previous_steer*0.9 + good_steer*0.1, throttle=1.0))
                 else:
-                    self.vehicle.apply_control(carla.VehicleControl(steer=self.previous_steer*0.9 + steer*0.1))
-                self.previous_steer = steer
-                self.throttle = 1.0
+                    self.good_vehicle.apply_control(carla.VehicleControl(steer=self.previous_steer*0.9 + good_steer*0.1))
+                
+                if self.bad_velocity < 20.0:
+                    self.bad_vehicle.apply_control(carla.VehicleControl(steer=self.bad_previous_steer*0.9 + bad_steer*0.1, throttle=1.0))
+                else:
+                    self.bad_vehicle.apply_control(carla.VehicleControl(steer=self.bad_previous_steer*0.9 + bad_steer*0.1))
+
+                self.good_previous_steer = good_steer
+                self.bad_previous_steer = bad_steer
+                self.good_throttle = 1.0
+                self.bad_throttle = 1.0
             
             # Traffic Light state
-            if self.vehicle.is_at_traffic_light():
-                traffic_light = self.vehicle.get_traffic_light()
+            if self.good_vehicle.is_at_traffic_light():
+                traffic_light = self.good_vehicle.get_traffic_light()
                 if traffic_light.get_state() == carla.TrafficLightState.Red:
                     traffic_light.set_state(carla.TrafficLightState.Green)
 
             self.collision_history = self.collision_obj.collision_data            
 
             # Rotation of the vehicle in correlation to the map/lane
-            self.rotation = self.vehicle.get_transform().rotation.yaw
+            self.good_rotation = self.good_vehicle.get_transform().rotation.yaw
+            self.bad_rotation = self.bad_vehicle.get_transform().rotation.yaw
 
             # Location of the car
-            self.location = self.vehicle.get_location()
+            self.good_location = self.good_vehicle.get_location()
+            self.bad_location = self.bad_vehicle.get_location()
 
 
             #transform = self.vehicle.get_transform()
@@ -214,7 +245,7 @@ class CarlaEnvironment():
                 # Check if we passed the next waypoint along the route
                 next_waypoint_index = waypoint_index + 1
                 wp = self.route_waypoints[next_waypoint_index % len(self.route_waypoints)]
-                dot = np.dot(self.vector(wp.transform.get_forward_vector())[:2],self.vector(self.location - wp.transform.location)[:2])
+                dot = np.dot(self.vector(wp.transform.get_forward_vector())[:2],self.vector(self.good_location - wp.transform.location)[:2])
                 if dot > 0.0:
                     waypoint_index += 1
                 else:
@@ -224,11 +255,11 @@ class CarlaEnvironment():
             # Calculate deviation from center of the lane
             self.current_waypoint = self.route_waypoints[ self.current_waypoint_index    % len(self.route_waypoints)]
             self.next_waypoint = self.route_waypoints[(self.current_waypoint_index+1) % len(self.route_waypoints)]
-            self.distance_from_center = self.distance_to_line(self.vector(self.current_waypoint.transform.location),self.vector(self.next_waypoint.transform.location),self.vector(self.location))
+            self.good_distance_from_center = self.distance_to_line(self.vector(self.current_waypoint.transform.location),self.vector(self.next_waypoint.transform.location),self.vector(self.location))
             self.center_lane_deviation += self.distance_from_center
 
             # Get angle difference between closest waypoint and vehicle forward vector
-            fwd    = self.vector(self.vehicle.get_velocity())
+            fwd    = self.vector(self.good_vehicle.get_velocity())
             wp_fwd = self.vector(self.current_waypoint.transform.rotation.get_forward_vector())
             self.angle  = self.angle_diff(fwd, wp_fwd)
 
@@ -245,27 +276,27 @@ class CarlaEnvironment():
             if len(self.collision_history) != 0:
                 done = True
                 reward = -10
-            elif self.distance_from_center > self.max_distance_from_center:
+            elif self.good_distance_from_center > self.max_distance_from_center:
                 done = True
                 reward = -10
-            elif self.episode_start_time + 10 < time.time() and self.velocity < 1.0:
+            elif self.episode_start_time + 10 < time.time() and self.good_velocity < 1.0:
                 reward = -10
                 done = True
-            elif self.velocity > self.max_speed:
+            elif self.good_velocity > self.max_speed:
                 reward = -10
                 done = True
 
             # Interpolated from 1 when centered to 0 when 3 m from center
-            centering_factor = max(1.0 - self.distance_from_center / self.max_distance_from_center, 0.0)
+            centering_factor = max(1.0 - self.good_distance_from_center / self.max_distance_from_center, 0.0)
             # Interpolated from 1 when aligned with the road to 0 when +/- 30 degress of road
-            angle_factor = max(1.0 - abs(self.angle / np.deg2rad(20)), 0.0)
+            angle_factor = max(1.0 - abs(self.good_angle / np.deg2rad(20)), 0.0)
 
             if not done:
                 if self.continous_action_space:
-                    if self.velocity < self.min_speed:
-                        reward = (self.velocity / self.min_speed) * centering_factor * angle_factor    
-                    elif self.velocity > self.target_speed:               
-                        reward = (1.0 - (self.velocity-self.target_speed) / (self.max_speed-self.target_speed)) * centering_factor * angle_factor  
+                    if self.good_velocity < self.min_speed:
+                        reward = (self.good_velocity / self.min_speed) * centering_factor * angle_factor    
+                    elif self.good_velocity > self.target_speed:               
+                        reward = (1.0 - (self.good_velocity-self.target_speed) / (self.max_speed-self.target_speed)) * centering_factor * angle_factor  
                     else:                                         
                         reward = 1.0 * centering_factor * angle_factor 
                 else:
@@ -283,14 +314,19 @@ class CarlaEnvironment():
                         self.checkpoint_frequency = None
                         self.checkpoint_waypoint_index = 0
 
-            while(len(self.camera_obj.front_camera) == 0):
+            while(len(self.good_camera_obj.front_camera) == 0 or len(self.bad_camera_obj.front_camera) == 0):
                 time.sleep(0.0001)
 
-            self.image_obs = self.camera_obj.front_camera.pop(-1)
-            normalized_velocity = self.velocity/self.target_speed
-            normalized_distance_from_center = self.distance_from_center / self.max_distance_from_center
-            normalized_angle = abs(self.angle / np.deg2rad(20))
-            self.navigation_obs = np.array([self.throttle, self.velocity, normalized_velocity, normalized_distance_from_center, normalized_angle])
+            self.good_image_obs = self.good_camera_obj.front_camera.pop(-1)
+            good_normalized_velocity = self.good_velocity/self.target_speed
+            normalized_distance_from_center = self.good_distance_from_center / self.max_distance_from_center
+            good_normalized_angle = abs(self.good_angle / np.deg2rad(20))
+            self.good_navigation_obs = np.array([self.good_throttle, self.good_velocity, good_normalized_velocity, normalized_distance_from_center, good_normalized_angle])
+
+            self.bad_image_obs = self.bad_camera_obj.front_camera.pop(-1)
+            bad_normalized_velocity = self.bad_velocity/self.target_speed
+            bad_normalized_angle = abs(self.bad_angle / np.deg2rad(20))
+            self.bad_navigation_obs = np.array([self.bad_throttle, self.bad_velocity, bad_normalized_velocity, self.bad_distance_from_center, bad_normalized_angle])
             
             # Remove everything that has been spawned in the env
             if done:
@@ -305,7 +341,7 @@ class CarlaEnvironment():
                 for actor in self.actor_list:
                     actor.destroy()
             
-            return [self.image_obs, self.navigation_obs], reward, done, [self.distance_covered, self.center_lane_deviation]
+            return [self.good_image_obs, self.good_navigation_obs], [self.bad_image_obs, self.bad_navigation_obs], reward, done, [self.distance_covered, self.center_lane_deviation]
 
         except:
             self.client.apply_batch([carla.command.DestroyActor(x) for x in self.sensor_list])
@@ -477,7 +513,8 @@ class CarlaEnvironment():
 
     # Clean up method
     def remove_sensors(self):
-        self.camera_obj = None
+        self.good_camera_obj = None
+        self.bad_camera_obj = None
         self.collision_obj = None
         self.lane_invasion_obj = None
         self.env_camera_obj = None
