@@ -154,7 +154,7 @@ class CarlaEnvironment():
             self.episode_start_time = time.time()
             return [self.good_image_obs, self.good_navigation_obs], [self.bad_image_obs, self.bad_navigation_obs]
 
-        except:
+        except Exception as e:
             self.client.apply_batch([carla.command.DestroyActor(x) for x in self.sensor_list])
             self.client.apply_batch([carla.command.DestroyActor(x) for x in self.actor_list])
             self.client.apply_batch([carla.command.DestroyActor(x) for x in self.walker_list])
@@ -163,6 +163,7 @@ class CarlaEnvironment():
             self.remove_sensors()
             if self.display_on:
                 pygame.quit()
+            raise e
 
 
 # ----------------------------------------------------------------
@@ -184,7 +185,7 @@ class CarlaEnvironment():
             self.bad_velocity = np.sqrt(bad_velocity.x**2 + bad_velocity.y**2 + bad_velocity.z**2) * 3.6
             
             good_action_idx, bad_action_idx = action_idx[0], action_idx[1]
-            
+
             # Action fron action space for contolling the vehicle with a discrete action
             if self.continous_action_space:
                 good_steer = float(good_action_idx[0])
@@ -220,6 +221,7 @@ class CarlaEnvironment():
                 self.bad_previous_steer = bad_steer
                 self.good_throttle = 1.0
                 self.bad_throttle = 1.0
+
             
             # Traffic Light state
             if self.good_vehicle.is_at_traffic_light():
@@ -237,7 +239,6 @@ class CarlaEnvironment():
             self.good_location = self.good_vehicle.get_location()
             self.bad_location = self.bad_vehicle.get_location()
 
-
             #transform = self.vehicle.get_transform()
             # Keep track of closest waypoint on the route
             waypoint_index = self.current_waypoint_index
@@ -250,18 +251,19 @@ class CarlaEnvironment():
                     waypoint_index += 1
                 else:
                     break
-
+            
             self.current_waypoint_index = waypoint_index
             # Calculate deviation from center of the lane
             self.current_waypoint = self.route_waypoints[ self.current_waypoint_index    % len(self.route_waypoints)]
             self.next_waypoint = self.route_waypoints[(self.current_waypoint_index+1) % len(self.route_waypoints)]
-            self.good_distance_from_center = self.distance_to_line(self.vector(self.current_waypoint.transform.location),self.vector(self.next_waypoint.transform.location),self.vector(self.location))
-            self.center_lane_deviation += self.distance_from_center
+            self.good_distance_from_center = self.distance_to_line(self.vector(self.current_waypoint.transform.location),self.vector(self.next_waypoint.transform.location),self.vector(self.good_location))
+            self.center_lane_deviation += self.good_distance_from_center
+
 
             # Get angle difference between closest waypoint and vehicle forward vector
             fwd    = self.vector(self.good_vehicle.get_velocity())
             wp_fwd = self.vector(self.current_waypoint.transform.rotation.get_forward_vector())
-            self.angle  = self.angle_diff(fwd, wp_fwd)
+            self.good_angle  = self.angle_diff(fwd, wp_fwd)
 
              # Update checkpoint for training
             if not self.fresh_start:
@@ -325,8 +327,7 @@ class CarlaEnvironment():
 
             self.bad_image_obs = self.bad_camera_obj.front_camera.pop(-1)
             bad_normalized_velocity = self.bad_velocity/self.target_speed
-            bad_normalized_angle = abs(self.bad_angle / np.deg2rad(20))
-            self.bad_navigation_obs = np.array([self.bad_throttle, self.bad_velocity, bad_normalized_velocity, self.bad_distance_from_center, bad_normalized_angle])
+            self.bad_navigation_obs = np.array([self.bad_throttle, self.bad_velocity, bad_normalized_velocity, self.bad_distance_from_center, self.bad_angle])
             
             # Remove everything that has been spawned in the env
             if done:
@@ -343,7 +344,7 @@ class CarlaEnvironment():
             
             return [self.good_image_obs, self.good_navigation_obs], [self.bad_image_obs, self.bad_navigation_obs], reward, done, [self.distance_covered, self.center_lane_deviation]
 
-        except:
+        except Exception as e:
             self.client.apply_batch([carla.command.DestroyActor(x) for x in self.sensor_list])
             self.client.apply_batch([carla.command.DestroyActor(x) for x in self.actor_list])
             self.client.apply_batch([carla.command.DestroyActor(x) for x in self.walker_list])
@@ -352,6 +353,7 @@ class CarlaEnvironment():
             self.remove_sensors()
             if self.display_on:
                 pygame.quit()
+            raise e
 
 
 
@@ -409,9 +411,10 @@ class CarlaEnvironment():
                 all_actors[i].go_to_location(
                     self.world.get_random_location_from_navigation())
 
-        except:
+        except Exception as e:
             self.client.apply_batch(
                 [carla.command.DestroyActor(x) for x in self.walker_list])
+            raise e
 
 
 # ---------------------------------------------------
@@ -432,9 +435,10 @@ class CarlaEnvironment():
                     other_vehicle.set_autopilot(True)
                     self.actor_list.append(other_vehicle)
             print("NPC vehicles have been generated in autopilot mode.")
-        except:
+        except Exception as e:
             self.client.apply_batch(
                 [carla.command.DestroyActor(x) for x in self.actor_list])
+            raise e
 
 
 # ----------------------------------------------------------------

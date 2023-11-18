@@ -29,7 +29,7 @@ def parse_args():
     parser.add_argument('--test-timesteps', type=int, default=TEST_TIMESTEPS, help='timesteps to test our model')
     parser.add_argument('--episode-length', type=int, default=EPISODE_LENGTH, help='max timesteps in an episode')
     parser.add_argument('--train', default=True, type=boolean_string, help='is it training?')
-    parser.add_argument('--town', type=str, default="Town07", help='which town do you like?')
+    parser.add_argument('--town', type=str, default="Town02", help='which town do you like?')
     parser.add_argument('--load-checkpoint', type=bool, default=MODEL_LOAD, help='resume training?')
     parser.add_argument('--torch-deterministic', type=lambda x:bool(strtobool(x)), default=True, nargs='?', const=True, help='if toggled, `torch.backends.cudnn.deterministic=False`')
     parser.add_argument('--cuda', type=lambda x:bool(strtobool(x)), default=True, nargs='?', const=True, help='if toggled, cuda will not be enabled by deafult')
@@ -313,9 +313,9 @@ def runner():
 
             print("Terminating the run.")
             sys.exit()
+    except Exception as e:
+        raise e
 
-    finally:
-        sys.exit()
 
 
 if __name__ == "__main__":
