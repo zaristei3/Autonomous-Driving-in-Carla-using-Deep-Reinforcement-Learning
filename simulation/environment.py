@@ -76,9 +76,11 @@ class CarlaEnvironment():
 
             # Camera Sensor
             self.camera_obj = CameraSensor(self.vehicle)
-            while(len(self.camera_obj.front_camera) == 0):
+            image_obs = None
+            while(len(self.camera_obj.front_camera) == 0 or (image_obs is not None and image_obs.sum(axis=2).min() <= 10)):
                 time.sleep(0.0001)
-            self.image_obs = self.camera_obj.front_camera.pop(-1)
+                image_obs = self.camera_obj.front_camera[-1] if len(self.camera_obj.front_camera) != 0 else None
+            self.image_obs = image_obs
             self.sensor_list.append(self.camera_obj.sensor)
 
             # Third person view of our vehicle in the Simulated env
@@ -283,10 +285,12 @@ class CarlaEnvironment():
                         self.checkpoint_frequency = None
                         self.checkpoint_waypoint_index = 0
 
-            while(len(self.camera_obj.front_camera) == 0):
+            image_obs = None
+            while(len(self.camera_obj.front_camera) == 0 or (image_obs is not None and image_obs.sum(axis=2).min() <= 10)):
                 time.sleep(0.0001)
+                image_obs = self.camera_obj.front_camera[-1] if len(self.camera_obj.front_camera) != 0 else None
 
-            self.image_obs = self.camera_obj.front_camera.pop(-1)
+            self.image_obs = image_obs
             normalized_velocity = self.velocity/self.target_speed
             normalized_distance_from_center = self.distance_from_center / self.max_distance_from_center
             normalized_angle = abs(self.angle / np.deg2rad(20))
