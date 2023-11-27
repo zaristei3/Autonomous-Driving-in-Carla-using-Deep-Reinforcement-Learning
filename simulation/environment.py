@@ -62,8 +62,9 @@ class CarlaEnvironment():
                 transform = self.map.get_spawn_points()[38] #Town7  is 38 
                 self.total_distance = 750
             elif self.town == "Town02":
-                choices = [self.map.get_spawn_points()[6], self.map.get_spawn_points()[11]]
-                transform = random.choice(choices)
+                # choices = [self.map.get_spawn_points()[6], self.map.get_spawn_points()[11]]
+                # transform = random.choice(choices)
+                transform = self.map.get_spawn_points()[11]
                 #Town2 is 11 or 6
                 self.total_distance = 780
             else:
@@ -77,9 +78,11 @@ class CarlaEnvironment():
             # Camera Sensor
             self.camera_obj = CameraSensor(self.vehicle)
             image_obs = None
-            while(len(self.camera_obj.front_camera) == 0 or (image_obs is not None and image_obs.sum(axis=2).min() <= 10)):
+            while(image_obs is None or image_obs.sum(axis=2).min() <= 10):
                 time.sleep(0.0001)
-                image_obs = self.camera_obj.front_camera[-1] if len(self.camera_obj.front_camera) != 0 else None
+                if len(self.camera_obj.front_camera) > 0:
+                    image_obs = self.camera_obj.front_camera.pop(-1)
+
             self.image_obs = image_obs
             self.sensor_list.append(self.camera_obj.sensor)
 
@@ -286,9 +289,10 @@ class CarlaEnvironment():
                         self.checkpoint_waypoint_index = 0
 
             image_obs = None
-            while(len(self.camera_obj.front_camera) == 0 or (image_obs is not None and image_obs.sum(axis=2).min() <= 10)):
+            while(image_obs is None or image_obs.sum(axis=2).min() <= 10):
                 time.sleep(0.0001)
-                image_obs = self.camera_obj.front_camera[-1] if len(self.camera_obj.front_camera) != 0 else None
+                if len(self.camera_obj.front_camera) > 0:
+                    image_obs = self.camera_obj.front_camera.pop(-1)
 
             self.image_obs = image_obs
             normalized_velocity = self.velocity/self.target_speed

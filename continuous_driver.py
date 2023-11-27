@@ -67,10 +67,11 @@ def runner():
             Here the functionality can be extended to different algorithms.
 
             """ 
-            sys.exit() 
+            # sys.exit() 
     except Exception as e:
-        print(e.message)
-        sys.exit()
+        raise e
+        # print(e.message)
+        # sys.exit()
     
     if train == True:
         writer = SummaryWriter(f"runs/{run_name}_{action_std_init}_{int(total_timesteps)}/{town}")
@@ -235,7 +236,7 @@ def runner():
                         pickle.dump(data_obj, handle)
                         
             print("Terminating the run.")
-            sys.exit()
+            # sys.exit()
         else:
             #Testing
             while timestep < args.test_timesteps:
@@ -286,16 +287,10 @@ def runner():
                 distance_covered = 0
 
             print("Terminating the run.")
-            sys.exit()
-
-    finally:
-        sys.exit()
+            # sys.exit()
+    except Exception as e:
+        raise e
 
 
 if __name__ == "__main__":
-    try:        
-        runner()
-    except KeyboardInterrupt:
-        sys.exit()
-    finally:
-        print('\nExit')
+    runner()
