@@ -67,7 +67,7 @@ class CarlaEnvironment():
             elif self.town == "Town02":
                 # choices = [self.map.get_spawn_points()[6], self.map.get_spawn_points()[11]]
                 # transform = random.choice(choices)
-                transform = self.map.get_spawn_points()[11]
+                transform = self.map.get_spawn_points()[6]
                 #Town2 is 11 or 6
                 self.total_distance = 780
             else:
