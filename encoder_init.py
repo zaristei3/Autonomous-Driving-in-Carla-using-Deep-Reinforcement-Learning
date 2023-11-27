@@ -27,12 +27,12 @@ class EncodeState():
         image_obs_result = self.conv_encoder(image_obs)
 
         for t in range(100):
-            if not torch.any(torch.isinf(image_obs_result)):
-                break
-            else:
+            if torch.any(torch.isinf(image_obs_result)):
                 image_obs_result = self.conv_encoder(image_obs)
+            else:
+                break
 
-        if torch.any(torch.isinf(image_obs)):
+        if torch.any(torch.isinf(image_obs_result)):
             im = Image.fromarray(observation[0].reshape(observation[0].shape[1], observation[0].shape[0], observation[0].shape[2]))
             im.save('err_img.png')
             raise RuntimeError
