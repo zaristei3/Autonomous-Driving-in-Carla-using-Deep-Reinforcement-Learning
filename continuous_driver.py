@@ -222,7 +222,9 @@ def runner():
                     bad_agent.learn()
                     good_agent.chkpt_save()
                     bad_agent.chkpt_save()
-                    chkt_file_nums = len(next(os.walk(f'checkpoints/PPO/{town}'))[2])
+                    chkpt_dir = f'checkpoints/PPO/{town}'
+                    os.makedirs(chkpt_dir, exist_ok=True)
+                    chkt_file_nums = len(next(os.walk(chkpt_dir))[2])
                     if chkt_file_nums != 0:
                         chkt_file_nums -=1
                     chkpt_file = f'checkpoints/PPO/{town}/checkpoint_ppo_'+str(chkt_file_nums)+'.pickle'
