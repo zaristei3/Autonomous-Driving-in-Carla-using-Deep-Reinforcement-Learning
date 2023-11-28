@@ -114,9 +114,4 @@ def main():
     model.save()
 
 if __name__ == "__main__":
-    try:
-        main()
-    except KeyboardInterrupt:
-        sys.exit()
-    finally:
-        print('\nTerminating...')
+    main()

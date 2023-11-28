@@ -5,11 +5,13 @@ import pygame
 from simulation.connection import carla
 from simulation.sensors import CameraSensor, CameraSensorEnv, CollisionSensor
 from simulation.settings import *
+from autoencoder.encoder import VariationalEncoder
+import torch
 
 
 class CarlaEnvironment():
 
-    def __init__(self, client, world, town, checkpoint_frequency=100, continuous_action=True) -> None:
+    def __init__(self, client, world, town, encoder, checkpoint_frequency=100, continuous_action=True) -> None:
 
 
         self.client = client
@@ -28,6 +30,7 @@ class CarlaEnvironment():
         self.checkpoint_frequency = checkpoint_frequency
         self.route_waypoints = None
         self.town = town
+        self.encoder = encoder
         
         # Objects to be kept alive
         self.good_camera_obj = None
@@ -78,12 +81,27 @@ class CarlaEnvironment():
             # Camera Sensor
             self.good_camera_obj = CameraSensor(self.good_vehicle)
             self.bad_camera_obj = CameraSensor(self.bad_vehicle)
-            while(len(self.good_camera_obj.front_camera) == 0 or len(self.bad_camera_obj.front_camera) == 0):
-                time.sleep(0.0001)
-            self.good_image_obs = self.good_camera_obj.front_camera.pop(-1)
-            self.sensor_list.append(self.good_camera_obj.sensor)
 
-            self.bad_image_obs = self.bad_camera_obj.front_camera.pop(-1)
+            good_img_obs, bad_img_obs = None, None
+
+            while(good_image_obs is None or bad_image_obs is None):
+                time.sleep(0.0001)
+                if len(self.good_camera_obj.front_camera) > 0:
+                    img = self.good_camera_obj.front_camera.pop(-1)
+                    processed_img = self.encoder.process_image(img)
+                    if not torch.any(torch.isinf(processed_img)):
+                        good_image_obs = processed_img
+
+                if len(self.bad_camera_obj.front_camera) > 0:
+                    img = self.bad_camera_obj.front_camera.pop(-1)
+                    processed_img = self.encoder.process_image(img)
+                    if not torch.any(torch.isinf(processed_img)):
+                        bad_image_obs = processed_img
+
+            self.good_image_obs = good_image_obs
+            self.bad_image_obs = bad_image_obs
+
+            self.sensor_list.append(self.good_camera_obj.sensor)
             self.sensor_list.append(self.bad_camera_obj.sensor)
 
             # Third person view of our vehicle in the Simulated env
@@ -152,7 +170,7 @@ class CarlaEnvironment():
             self.collision_history.clear()
 
             self.episode_start_time = time.time()
-            return [self.good_image_obs, self.good_navigation_obs], [self.bad_image_obs, self.bad_navigation_obs]
+            return self.encoder.process(self.good_image_obs, self.good_navigation_obs), self.encoder.process(self.bad_image_obs, self.bad_navigation_obs)
 
         except Exception as e:
             self.client.apply_batch([carla.command.DestroyActor(x) for x in self.sensor_list])
@@ -316,16 +334,34 @@ class CarlaEnvironment():
                         self.checkpoint_frequency = None
                         self.checkpoint_waypoint_index = 0
 
-            while(len(self.good_camera_obj.front_camera) == 0 or len(self.bad_camera_obj.front_camera) == 0):
-                time.sleep(0.0001)
 
-            self.good_image_obs = self.good_camera_obj.front_camera.pop(-1)
+            good_img_obs, bad_img_obs = None, None
+
+            while(good_image_obs is None or bad_image_obs is None):
+                time.sleep(0.0001)
+                if len(self.good_camera_obj.front_camera) > 0:
+                    img = self.good_camera_obj.front_camera.pop(-1)
+                    processed_img = self.encoder.process_image(img)
+                    if not torch.any(torch.isinf(processed_img)):
+                        good_image_obs = processed_img
+                    else:
+                        good_image_obs = self.good_image_obs
+
+                if len(self.bad_camera_obj.front_camera) > 0:
+                    img = self.bad_camera_obj.front_camera.pop(-1)
+                    processed_img = self.encoder.process_image(img)
+                    if not torch.any(torch.isinf(processed_img)):
+                        bad_image_obs = processed_img
+                    else:
+                        bad_image_obs = self.bad_image_obs
+
+            self.good_image_obs = good_image_obs
             good_normalized_velocity = self.good_velocity/self.target_speed
             normalized_distance_from_center = self.good_distance_from_center / self.max_distance_from_center
             good_normalized_angle = abs(self.good_angle / np.deg2rad(20))
             self.good_navigation_obs = np.array([self.good_throttle, self.good_velocity, good_normalized_velocity, normalized_distance_from_center, good_normalized_angle])
 
-            self.bad_image_obs = self.bad_camera_obj.front_camera.pop(-1)
+            self.bad_image_obs = bad_image_obs
             bad_normalized_velocity = self.bad_velocity/self.target_speed
             self.bad_navigation_obs = np.array([self.bad_throttle, self.bad_velocity, bad_normalized_velocity, self.bad_distance_from_center, self.bad_angle])
             
@@ -342,7 +378,7 @@ class CarlaEnvironment():
                 for actor in self.actor_list:
                     actor.destroy()
             
-            return [self.good_image_obs, self.good_navigation_obs], [self.bad_image_obs, self.bad_navigation_obs], reward, done, [self.distance_covered, self.center_lane_deviation]
+            return self.encoder.process(self.good_image_obs, self.good_navigation_obs), self.encoder.process(self.bad_image_obs, self.bad_navigation_obs), reward, done, [self.distance_covered, self.center_lane_deviation]
 
         except Exception as e:
             self.client.apply_batch([carla.command.DestroyActor(x) for x in self.sensor_list])

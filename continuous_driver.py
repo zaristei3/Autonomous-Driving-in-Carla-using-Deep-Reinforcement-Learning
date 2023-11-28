@@ -67,10 +67,11 @@ def runner():
             Here the functionality can be extended to different algorithms.
 
             """ 
-            sys.exit() 
+            # sys.exit() 
     except Exception as e:
-        print(e.message)
-        sys.exit()
+        raise e
+        # print(e.message)
+        # sys.exit()
     
     if train == True:
         writer = SummaryWriter(f"runs/{run_name}_{action_std_init}_{int(total_timesteps)}/{town}")
@@ -109,11 +110,12 @@ def runner():
     except:
         logging.error("Connection has been refused by the server.")
         ConnectionRefusedError
-    if train:
-        env = CarlaEnvironment(client, world,town)
-    else:
-        env = CarlaEnvironment(client, world,town, checkpoint_frequency=None)
+
     encode = EncodeState(LATENT_DIM)
+    if train:
+        env = CarlaEnvironment(client, world,town, encoder=encode)
+    else:
+        env = CarlaEnvironment(client, world,town, encoder=encode, checkpoint_frequency=None)
 
 
     #========================================================================
@@ -164,7 +166,6 @@ def runner():
             while timestep < total_timesteps:
             
                 good_observation, bad_observation = env.reset()
-                good_observation, bad_observation= encode.process(good_observation), encode.process(bad_observation)
 
                 current_ep_reward = 0
                 t1 = datetime.now()
@@ -178,7 +179,6 @@ def runner():
                     good_observation, bad_observation, reward, done, info = env.step((good_action, bad_action))
                     if good_observation is None or bad_observation is None:
                         break
-                    good_observation, bad_observation= encode.process(good_observation), encode.process(bad_observation)
                     
                     good_agent.memory.rewards.append(reward)
                     good_agent.memory.dones.append(done)
@@ -260,12 +260,11 @@ def runner():
                         pickle.dump(data_obj, handle)
                         
             print("Terminating the run.")
-            sys.exit()
+            # sys.exit()
         else:
             #Testing
             while timestep < args.test_timesteps:
                 good_observation, bad_observation = env.reset()
-                good_observation, bad_observation = encode.process(good_observation), encode.process(bad_observation)
 
                 current_ep_reward = 0
                 t1 = datetime.now()
@@ -312,16 +311,10 @@ def runner():
                 distance_covered = 0
 
             print("Terminating the run.")
-            sys.exit()
+            # sys.exit()
     except Exception as e:
         raise e
 
 
-
 if __name__ == "__main__":
-    try:        
-        runner()
-    except KeyboardInterrupt:
-        sys.exit()
-    finally:
-        print('\nExit')
+    runner()
