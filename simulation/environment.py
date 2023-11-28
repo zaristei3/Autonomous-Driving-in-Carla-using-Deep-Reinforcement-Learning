@@ -82,7 +82,7 @@ class CarlaEnvironment():
             self.good_camera_obj = CameraSensor(self.good_vehicle)
             self.bad_camera_obj = CameraSensor(self.bad_vehicle)
 
-            good_img_obs, bad_img_obs = None, None
+            good_image_obs, bad_image_obs = None, None
 
             while(good_image_obs is None or bad_image_obs is None):
                 time.sleep(0.0001)
@@ -335,7 +335,7 @@ class CarlaEnvironment():
                         self.checkpoint_waypoint_index = 0
 
 
-            good_img_obs, bad_img_obs = None, None
+            good_image_obs, bad_image_obs = None, None
 
             while(good_image_obs is None or bad_image_obs is None):
                 time.sleep(0.0001)
