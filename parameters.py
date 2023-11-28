@@ -3,6 +3,7 @@
     All the much needed hyper-parameters needed for the algorithm implementation. 
 
 """
+import os
 
 MODEL_LOAD = False
 SEED = 0
@@ -35,4 +36,5 @@ ACTION_STD_INIT = 0.2
 TEST_TIMESTEPS = 5e4
 PPO_LEARNING_RATE = 1e-4  
 PPO_CHECKPOINT_DIR = 'preTrained_models/ppo/'
+os.makedirs(PPO_CHECKPOINT_DIR, exist_ok=True)
 POLICY_CLIP = 0.2
