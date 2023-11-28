@@ -270,7 +270,7 @@ class CarlaEnvironment():
                 else:
                     break
             
-            self.current_waypoint_index = waypoint_index
+            # self.current_waypoint_index = waypoint_index
             # Calculate deviation from center of the lane
             self.current_waypoint = self.route_waypoints[ self.current_waypoint_index    % len(self.route_waypoints)]
             self.next_waypoint = self.route_waypoints[(self.current_waypoint_index+1) % len(self.route_waypoints)]
@@ -296,6 +296,9 @@ class CarlaEnvironment():
             if len(self.collision_history) != 0:
                 done = True
                 reward = -10
+                if isinstance(self.collision_history[-1][1], carla.Vehicle):
+                    reward = -1000
+
             elif self.good_distance_from_center > self.max_distance_from_center:
                 done = True
                 reward = -10

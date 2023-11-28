@@ -31,6 +31,7 @@ def parse_args():
     parser.add_argument('--train', default=True, type=boolean_string, help='is it training?')
     parser.add_argument('--town', type=str, default="Town02", help='which town do you like?')
     parser.add_argument('--load-checkpoint', type=bool, default=MODEL_LOAD, help='resume training?')
+    parser.add_argument('--load-checkpoint-bad', type=bool, default=MODEL_LOAD, help='resume training bad?')
     parser.add_argument('--torch-deterministic', type=lambda x:bool(strtobool(x)), default=True, nargs='?', const=True, help='if toggled, `torch.backends.cudnn.deterministic=False`')
     parser.add_argument('--cuda', type=lambda x:bool(strtobool(x)), default=True, nargs='?', const=True, help='if toggled, cuda will not be enabled by deafult')
     args = parser.parse_args()
@@ -55,6 +56,7 @@ def runner():
     train = args.train
     town = args.town
     checkpoint_load = args.load_checkpoint
+    bad_checkpoint_load = args.load_checkpoint_bad
     total_timesteps = args.total_timesteps
     action_std_init = args.action_std_init
 
@@ -136,12 +138,13 @@ def runner():
             good_agent = PPOAgent(town, action_std_init)
             bad_agent = PPOAgent(town, action_std_init, good=False)
             good_agent.load()
-            try:
-                bad_agent.load()
-            except Exception as e:
-                bad_agent.good = True
-                bad_agent.load()
-                bad_agent.good = False
+            if bad_checkpoint_load:
+                try:
+                    bad_agent.load()
+                except Exception as e:
+                    bad_agent.good = True
+                    bad_agent.load()
+                    bad_agent.good = False
         else:
             if train == False:
                 good_agent = PPOAgent(town, action_std_init)
